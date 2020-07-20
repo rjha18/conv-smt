@@ -1,5 +1,4 @@
 import numpy as np
-import tensorflow as tf
 import tensorflow.compat.v1 as tf
 # import matplotlib.pyplot as plt
 
@@ -193,37 +192,41 @@ with tf.Session() as sess:
 
             global_step = epoch*N+index
 
-            fidx = np.random.randint(0, N, batch_size)
+            fidx = np.random.randint(0, N - 3, batch_size)
 
-            sequence = frames[fidx, :, :, 0].reshape([batch_size, H, W, 1])
+            for i in range(3):
 
-            summary_str, run_loss, F_prime, HIST = sess.run(
-                [summary_op, mse, U_prime, hist],
-                feed_dict={I: sequence, U: F})
+                sequence = frames[fidx + i, :, :, 0].reshape([batch_size, H,
+                                                              W, 1])
 
-            # F_prime contains the updated features
-            # If we do not project then we can arbitrarily improve the loss by
-            # making magnitudes bigger and activations smaller:
-            #
-            # Code:  alpha_up = alpha/c
-            # Feats: U_up = U*c
-            #
-            # alpha_up*U_up = (alpha/c)*U*c = alpha*U
-            # which means the reconstruction is the same but alpha_up has
-            # smaller l1 norm than alpha. Therefore we need to constraint the
-            # magnitude of U to make this a well defined problem
+                summary_str, run_loss, F_prime, HIST = sess.run(
+                    [summary_op, mse, U_prime, hist],
+                    feed_dict={I: sequence, U: F})
 
-            F = project_basis(F_prime)
+                # F_prime contains the updated features
+                # If we do not project then we can arbitrarily improve the
+                # loss by making magnitudes bigger and activations smaller:
+                #
+                # Code:  alpha_up = alpha/c
+                # Feats: U_up = U*c
+                #
+                # alpha_up*U_up = (alpha/c)*U*c = alpha*U
+                # which means the reconstruction is the same but alpha_up has
+                # smaller l1 norm than alpha. Therefore we need to constraint
+                # the magnitude of U to make this a well defined problem
 
-            print("Loss ("+str(index)+"):", run_loss)
+                F = project_basis(F_prime)
 
-            # Uncomment these to plot the optimization history and see if the
-            # optimization converges for your chosen eta and num of iterations
-            # plt.plot(HIST)
-            # plt.show()
+                print("Loss ("+str(index)+"):", run_loss)
 
-            summary_writer.add_summary(summary_str, global_step)
+                # Uncomment these to plot the optimization history and see if
+                # the optimization converges for your chosen eta and num of
+                # iterations
+                # plt.plot(HIST)
+                # plt.show()
 
-            # Save dictionary every 100 batches
-            if global_step % 100 == 0:
-                np.save('bases.npy', F)
+                summary_writer.add_summary(summary_str, global_step)
+
+                # Save dictionary every 100 batches
+                if global_step % 100 == 0:
+                    np.save('bases.npy', F)

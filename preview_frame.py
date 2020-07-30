@@ -1,7 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-frames = np.load('./Data/processed/e-processed.npy')
+frames = np.load('./Data/bear-processed.npy')
 print(frames.shape)
-plt.imshow(frames[-100, :, :, 0], cmap='gray')
+plt.imshow(frames[150, :, :, 0], cmap='gray')
 plt.show()
+plt.savefig("./Data/preview/preview")

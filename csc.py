@@ -6,17 +6,17 @@ tf.disable_v2_behavior()
 
 # V and b are for display purposes here (filters will be displayed in V rows
 # of b filters each)
-V = 24
+V = 12
 b = 12
 K = V*b
 
 
 stride = 9
-k_sz = 16
+k_sz = 12
 sz = k_sz*k_sz
 batch_size = 8
 
-frames = np.load('./Data/processed/e-processed.npy')
+frames = np.load('./Data/bear-processed.npy')
 frames = frames.transpose([0, 3, 1, 2])
 N, _, H, W = frames.shape
 print(frames.shape)

@@ -1,31 +1,31 @@
 import numpy as np
 import tensorflow.compat.v1 as tf
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 tf.disable_v2_behavior()
 
 # V and b are for display purposes here (filters will be displayed in V rows
 # of b filters each)
-V = 12
+V = 24
 b = 12
 K = V*b
 
+T = 3;
 
 stride = 9
-k_sz = 12
+k_sz = 16
 sz = k_sz*k_sz
 batch_size = 8
 
-frames = np.load('./Data/bear-processed.npy')
-frames = frames.transpose([0, 3, 1, 2])
-N, _, H, W = frames.shape
-print(frames.shape)
-frames = frames.transpose([0, 2, 3, 1])
+frames = np.load('./Data/frames.npy')
 
 
-I = tf.placeholder(tf.float32, shape=(batch_size, H, W, 1))
+N, H, W, C = frames.shape
+
+I_trajectory = tf.placeholder(tf.float32, shape=(batch_size, T, H, W, 1))
 U = tf.placeholder(tf.float32, shape=(K, sz))
 
+I = tf.reshape(I_trajectory,[-1,H,W,1]);
 
 # Soft thresholding operator
 def _soft_th(x, param):
@@ -56,7 +56,7 @@ def deconv_generator(alpha, filters):
     filters = tf.reshape(filters, [1, K, k_sz, k_sz])
     filters = tf.transpose(filters, [2, 3, 0, 1])
     img = tf.nn.conv2d_transpose(alpha, filters, output_shape=[
-                                 batch_size, H, W, 1],
+                                 batch_size*T, H, W, 1],
                                  strides=[1, stride, stride, 1],
                                  padding='SAME')
     return img
@@ -71,8 +71,11 @@ def MSE(y, y_hat):
 
 
 # FISTA loop for sparse inference: rectify=True makes the code nonnegative
-def fista_loop(loss, prev, curr, y, t, eta, gamma, rectify=False):
+def fista_loop(loss_func, prev, curr, y, t, hist, eta, gamma, rectify=False):
 
+    loss = loss_func(y);
+    hist = tf.concat([hist,tf.reshape(loss,[1,1])],axis=0);
+    
     grad_y = tf.gradients(xs=y, ys=loss)[0]
 
     y = y - eta*grad_y
@@ -87,7 +90,10 @@ def fista_loop(loss, prev, curr, y, t, eta, gamma, rectify=False):
     y = curr + (((t+1)-2)/((t+1)+1))*(curr-prev)
 
     y = tf.stop_gradient(y)
-    return prev, curr, y
+    
+    t += 1.0;
+    
+    return [prev, curr, y, t, hist];
 
 
 # reconstruct and compute loss
@@ -103,30 +109,31 @@ alpha *= 0
 
 # eta is the gradient descent step size
 # gamma is the sparsity penalty strength (large == more sparse)
-eta = 4e-2
-gamma = 1e-2
+eta = 2e-1
+gamma = 4e-3
 
-# hist keeps track of the loss for debug purposes
-hist = tf.zeros((0, 1))
+# These are functions used in the while loop. The step function corresponds to one iteration.
+# The advantage is that TF is aware the loop exists and sets up the model faster.
+loss_func = lambda alpha : rec_loss(alpha, U, I);
+step_func = lambda prev,curr,y,t,hist : fista_loop(loss_func,prev,curr,y,t,hist,eta,gamma,rectify=True);
+crit_func = lambda prev,curr,y,t,hist : tf.greater(1.0,0.0);
 
 y = alpha
 curr = alpha
 prev = alpha
-lambda_dense = 1e-1
 
-# change the number of iterations accordingly if the optimization has not
-# converged. You can use hist for this (plot it and see if the loss has
-# saturated)
+# hist keeps track of the loss for debug purposes
+hist = tf.zeros((0,1));
 
-for i in range(50):
-    mse = rec_loss(y, U, I)
-    prev, curr, y = fista_loop(mse, prev, curr, y, i, eta, gamma, rectify=True)
-    hist = tf.concat((hist, tf.reshape(mse, [1, 1])), axis=0)
+t = tf.constant(1.0);
+
+[prev,curr,y,t,hist] = tf.while_loop(crit_func,step_func,[prev,curr,y,t,hist],\
+	shape_invariants=[prev.get_shape(),curr.get_shape(),y.get_shape(),t.get_shape(),tf.TensorShape([None, 1])],back_prop=False,maximum_iterations=50);
+
 
 alpha = tf.stop_gradient(curr)
-
 I_hat = deconv_generator(alpha, U)
-mse = rec_loss(alpha, U, I)
+mse = MSE(I,I_hat);
 
 
 # gradient descent step on features
@@ -192,41 +199,51 @@ with tf.Session() as sess:
 
             global_step = epoch*N+index
 
-            fidx = np.random.randint(0, N - 3, batch_size)
+            fidx = np.random.randint(0, N - T, batch_size)
+            sequence = np.zeros([batch_size,T,H,W,1]);
+            sequence[:,[0],:,:,:] = frames[fidx].reshape([batch_size, 1, H, W, 1])
+            
+            # I am pretty sure there is a pythonic way of doing this more efficiently.
+            
+            for tidx in range(T-1):
+            	sequence[:,[tidx+1],:,:,:] = frames[fidx+tidx+1].reshape([batch_size, 1, H, W, 1])
+            	
+            summary_str, run_loss, F_prime, HIST = sess.run([summary_op, mse, U_prime, hist],\
+                feed_dict={I_trajectory: sequence, U: F})
 
-            for i in range(3):
+            # F_prime contains the updated features
+            # If we do not project then we can arbitrarily improve the
+            # loss by making magnitudes bigger and activations smaller:
+            #
+            # Code:  alpha_up = alpha/c
+            # Feats: U_up = U*c
+            #
+            # alpha_up*U_up = (alpha/c)*U*c = alpha*U
+            # which means the reconstruction is the same but alpha_up has
+            # smaller l1 norm than alpha. Therefore we need to constraint
+            # the magnitude of U to make this a well defined problem
 
-                sequence = frames[fidx + i, :, :, 0].reshape([batch_size, H,
-                                                              W, 1])
+            F = project_basis(F_prime)
 
-                summary_str, run_loss, F_prime, HIST = sess.run(
-                    [summary_op, mse, U_prime, hist],
-                    feed_dict={I: sequence, U: F})
+            print("Loss ("+str(index)+"):", run_loss)
 
-                # F_prime contains the updated features
-                # If we do not project then we can arbitrarily improve the
-                # loss by making magnitudes bigger and activations smaller:
-                #
-                # Code:  alpha_up = alpha/c
-                # Feats: U_up = U*c
-                #
-                # alpha_up*U_up = (alpha/c)*U*c = alpha*U
-                # which means the reconstruction is the same but alpha_up has
-                # smaller l1 norm than alpha. Therefore we need to constraint
-                # the magnitude of U to make this a well defined problem
+            # Uncomment these to plot the optimization history and see if
+            # the optimization converges for your chosen eta and num of
+            # iterations
+            # plt.plot(HIST)
+            # plt.show()
 
-                F = project_basis(F_prime)
+            summary_writer.add_summary(summary_str, global_step)
 
-                print("Loss ("+str(index)+"):", run_loss)
-
-                # Uncomment these to plot the optimization history and see if
-                # the optimization converges for your chosen eta and num of
-                # iterations
-                # plt.plot(HIST)
-                # plt.show()
-
-                summary_writer.add_summary(summary_str, global_step)
-
-                # Save dictionary every 100 batches
-                if global_step % 100 == 0:
-                    np.save('bases.npy', F)
+            # Save dictionary every 100 batches
+            if global_step % 100 == 0:
+                np.save('bases.npy', F)
+                
+                
+                
+                
+                
+                
+                
+                
+                

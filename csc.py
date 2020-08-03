@@ -10,17 +10,30 @@ V = 24
 b = 12
 K = V*b
 
-T = 3;
 
 stride = 9
 k_sz = 16
 sz = k_sz*k_sz
-batch_size = 8
+
 
 frames = np.load('./Data/frames.npy')
-
-
 N, H, W, C = frames.shape
+
+
+batch_mode = True;
+
+batch_size = 8;
+
+
+if batch_mode:
+    T = 1;
+    N_batches = 128;
+    
+    if N_batches*batch_size>N:
+        print('Not enough data examples!')
+        input()
+else:
+    T = 3;
 
 I_trajectory = tf.placeholder(tf.float32, shape=(batch_size, T, H, W, 1))
 U = tf.placeholder(tf.float32, shape=(K, sz))
@@ -128,7 +141,7 @@ hist = tf.zeros((0,1));
 t = tf.constant(1.0);
 
 [prev,curr,y,t,hist] = tf.while_loop(crit_func,step_func,[prev,curr,y,t,hist],\
-	shape_invariants=[prev.get_shape(),curr.get_shape(),y.get_shape(),t.get_shape(),tf.TensorShape([None, 1])],back_prop=False,maximum_iterations=50);
+    shape_invariants=[prev.get_shape(),curr.get_shape(),y.get_shape(),t.get_shape(),tf.TensorShape([None, 1])],back_prop=False,maximum_iterations=50);
 
 
 alpha = tf.stop_gradient(curr)
@@ -193,51 +206,76 @@ with tf.Session() as sess:
     else:
         F = project_basis(np.random.randn(K, sz))
 
-    for epoch in range(100):
 
-        for index in range(N):
+    
+    if batch_mode:
+    
+        sequence = frames[0:batch_size].reshape([batch_size, 1, H, W, 1])
+        [ALPHA] = sess.run([alpha],feed_dict={I_trajectory: sequence, U: F})
+        
+        alpha_shape = ALPHA.shape;
+        batch_alpha = np.zeros((N_batches*batch_size,)+alpha_shape[1:])
+    
+        
+        
+        for index in range(N_batches):
 
-            global_step = epoch*N+index
+            sequence = frames[index*batch_size:(index+1)*batch_size].reshape([batch_size, 1, H, W, 1])
 
-            fidx = np.random.randint(0, N - T, batch_size)
-            sequence = np.zeros([batch_size,T,H,W,1]);
-            sequence[:,[0],:,:,:] = frames[fidx].reshape([batch_size, 1, H, W, 1])
+            print('Example '+str(index)+'/'+str(N_batches));
             
-            # I am pretty sure there is a pythonic way of doing this more efficiently.
+            [ALPHA] = sess.run([alpha],feed_dict={I_trajectory: sequence, U: F})
             
-            for tidx in range(T-1):
-            	sequence[:,[tidx+1],:,:,:] = frames[fidx+tidx+1].reshape([batch_size, 1, H, W, 1])
-            	
-            summary_str, run_loss, F_prime, HIST = sess.run([summary_op, mse, U_prime, hist],\
+            batch_alpha[index*batch_size:(index+1)*batch_size] = ALPHA;
+            
+        np.save('batch_alpha.npy',batch_alpha);
+        
+                
+    else:
+        for epoch in range(100):
+            for index in range(N):
+
+                global_step = epoch*N+index
+
+                fidx = np.random.randint(0, N - T, batch_size)
+                sequence = np.zeros([batch_size,T,H,W,1]);
+                sequence[:,[0],:,:,:] = frames[fidx].reshape([batch_size, 1, H, W, 1])
+                
+                # I am pretty sure there is a pythonic way of doing this more efficiently.
+                
+                for tidx in range(T-1):
+                    sequence[:,[tidx+1],:,:,:] = frames[fidx+tidx+1].reshape([batch_size, 1, H, W, 1])
+                
+                summary_str, run_loss, F_prime, HIST = sess.run([summary_op, mse, U_prime, hist],\
                 feed_dict={I_trajectory: sequence, U: F})
 
-            # F_prime contains the updated features
-            # If we do not project then we can arbitrarily improve the
-            # loss by making magnitudes bigger and activations smaller:
-            #
-            # Code:  alpha_up = alpha/c
-            # Feats: U_up = U*c
-            #
-            # alpha_up*U_up = (alpha/c)*U*c = alpha*U
-            # which means the reconstruction is the same but alpha_up has
-            # smaller l1 norm than alpha. Therefore we need to constraint
-            # the magnitude of U to make this a well defined problem
+                # F_prime contains the updated features
+                # If we do not project then we can arbitrarily improve the
+                # loss by making magnitudes bigger and activations smaller:
+                #
+                # Code:  alpha_up = alpha/c
+                # Feats: U_up = U*c
+                #
+                # alpha_up*U_up = (alpha/c)*U*c = alpha*U
+                # which means the reconstruction is the same but alpha_up has
+                # smaller l1 norm than alpha. Therefore we need to constraint
+                # the magnitude of U to make this a well defined problem
 
-            F = project_basis(F_prime)
+                F = project_basis(F_prime)
 
-            print("Loss ("+str(index)+"):", run_loss)
+                print("Loss ("+str(index)+"):", run_loss)
 
-            # Uncomment these to plot the optimization history and see if
-            # the optimization converges for your chosen eta and num of
-            # iterations
-            # plt.plot(HIST)
-            # plt.show()
+                # Uncomment these to plot the optimization history and see if
+                # the optimization converges for your chosen eta and num of
+                # iterations
+                # plt.plot(HIST)
+                # plt.show()
 
-            summary_writer.add_summary(summary_str, global_step)
+                summary_writer.add_summary(summary_str, global_step)
 
-            # Save dictionary every 100 batches
-            if global_step % 100 == 0:
-                np.save('bases.npy', F)
+                # Save dictionary every 100 batches
+                if global_step % 100 == 0:
+                    np.save('bases.npy', F)
                 
                 
                 

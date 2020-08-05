@@ -6,13 +6,13 @@ tf.disable_v2_behavior()
 
 # V and b are for display purposes here (filters will be displayed in V rows
 # of b filters each)
-V = 24
-b = 12
+V = 16
+b = 8
 K = V*b
 
 
-stride = 9
-k_sz = 16
+stride = 4
+k_sz = 8
 sz = k_sz*k_sz
 
 
@@ -24,10 +24,14 @@ batch_mode = True;
 
 batch_size = 8;
 
+# If you want to load learned features
+load = True
+load_pre = './'
 
 if batch_mode:
     T = 1;
     N_batches = 128;
+    load = True
     
     if N_batches*batch_size>N:
         print('Not enough data examples!')
@@ -151,7 +155,7 @@ mse = MSE(I,I_hat);
 
 # gradient descent step on features
 grad_U = tf.gradients(xs=U, ys=mse)[0]
-U_prime = U - 1e-1*grad_U
+U_prime = U - 1e-0*grad_U
 
 
 # keep track of everything on tensorboard
@@ -196,9 +200,6 @@ with tf.Session() as sess:
     init_op = tf.global_variables_initializer()
     sess.run(init_op)
 
-    # If you want to load learned features
-    load = False
-    load_pre = './'
 
     if load:
         F = np.load(load_pre+'bases.npy')

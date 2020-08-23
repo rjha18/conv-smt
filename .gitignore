@@ -4,3 +4,4 @@ log
 legacy
 *.npy
 .vscode
+.ipynb_checkpoints

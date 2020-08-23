@@ -6,7 +6,7 @@ tf.disable_v2_behavior()
 
 # V and b are for display purposes here (filters will be displayed in V rows
 # of b filters each)
-V = 16
+V = 12
 b = 8
 K = V*b
 
@@ -16,7 +16,7 @@ k_sz = 8
 sz = k_sz*k_sz
 
 
-frames = np.load('./Data/frames.npy')
+frames = np.load('./Data/bear-processed.npy')
 N, H, W, C = frames.shape
 
 
@@ -25,14 +25,15 @@ batch_mode = True;
 batch_size = 8;
 
 # If you want to load learned features
-load = True
+load = False
 load_pre = './'
 
 if batch_mode:
     T = 1;
-    N_batches = 128;
+    N_batches = 32;
     load = True
     
+    print(N)
     if N_batches*batch_size>N:
         print('Not enough data examples!')
         input()
@@ -220,7 +221,7 @@ with tf.Session() as sess:
         
         
         for index in range(N_batches):
-
+            print(index * batch_size)
             sequence = frames[index*batch_size:(index+1)*batch_size].reshape([batch_size, 1, H, W, 1])
 
             print('Example '+str(index)+'/'+str(N_batches));
@@ -247,6 +248,7 @@ with tf.Session() as sess:
                 for tidx in range(T-1):
                     sequence[:,[tidx+1],:,:,:] = frames[fidx+tidx+1].reshape([batch_size, 1, H, W, 1])
                 
+                #print("yeet")
                 summary_str, run_loss, F_prime, HIST = sess.run([summary_op, mse, U_prime, hist],\
                 feed_dict={I_trajectory: sequence, U: F})
 

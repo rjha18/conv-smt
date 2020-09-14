@@ -23,8 +23,14 @@ print(frames.shape)
 N, H, W = frames.shape
 
 
+batch_mode = True
+batch_size = 32
+
+# If you want to load learned features
+load = False
 load_pre = './'
 
+if batch_mode:
     T = 1
     N_batches = 31
     load = True

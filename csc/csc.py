@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow.compat.v1 as tf
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 tf.disable_v2_behavior()
 
@@ -11,39 +11,36 @@ b = 16
 K = V*b
 
 
-stride = 4
-k_sz = 8
+stride = 8
+k_sz = 12
 sz = k_sz*k_sz
 
 
-frames = np.load('./Data/bear-processed.npy')
-N, H, W, C = frames.shape
+frames = np.load('./topography/small.npy')
+frames = frames.reshape([-1, V, b])
+print(frames.shape)
+# N, H, W, C = frames.shape
+N, H, W = frames.shape
 
 
-batch_mode = False;
-
-batch_size = 8;
-
-# If you want to load learned features
-load = False
 load_pre = './'
 
-if batch_mode:
-    T = 1;
-    N_batches = 32;
+    T = 1
+    N_batches = 31
     load = True
-    
+
     print(N)
-    if N_batches*batch_size>N:
+    if N_batches * batch_size > N:
         print('Not enough data examples!')
         input()
 else:
-    T = 3;
+    T = 3
 
 I_trajectory = tf.placeholder(tf.float32, shape=(batch_size, T, H, W, 1))
 U = tf.placeholder(tf.float32, shape=(K, sz))
 
-I = tf.reshape(I_trajectory,[-1,H,W,1]);
+I = tf.reshape(I_trajectory, [-1, H, W, 1])
+
 
 # Soft thresholding operator
 def _soft_th(x, param):
@@ -91,9 +88,9 @@ def MSE(y, y_hat):
 # FISTA loop for sparse inference: rectify=True makes the code nonnegative
 def fista_loop(loss_func, prev, curr, y, t, hist, eta, gamma, rectify=False):
 
-    loss = loss_func(y);
-    hist = tf.concat([hist,tf.reshape(loss,[1,1])],axis=0);
-    
+    loss = loss_func(y)
+    hist = tf.concat([hist, tf.reshape(loss, [1, 1])], axis=0)
+
     grad_y = tf.gradients(xs=y, ys=loss)[0]
 
     y = y - eta*grad_y
@@ -108,10 +105,10 @@ def fista_loop(loss_func, prev, curr, y, t, hist, eta, gamma, rectify=False):
     y = curr + (((t+1)-2)/((t+1)+1))*(curr-prev)
 
     y = tf.stop_gradient(y)
-    
-    t += 1.0;
-    
-    return [prev, curr, y, t, hist];
+
+    t += 1.0
+
+    return [prev, curr, y, t, hist]
 
 
 # reconstruct and compute loss
@@ -141,9 +138,9 @@ curr = alpha
 prev = alpha
 
 # hist keeps track of the loss for debug purposes
-hist = tf.zeros((0,1));
+hist = tf.zeros((0, 1))
 
-t = tf.constant(1.0);
+t = tf.constant(1.0)
 
 [prev,curr,y,t,hist] = tf.while_loop(crit_func,step_func,[prev,curr,y,t,hist],\
     shape_invariants=[prev.get_shape(),curr.get_shape(),y.get_shape(),t.get_shape(),tf.TensorShape([None, 1])],back_prop=False,maximum_iterations=50);
@@ -201,38 +198,33 @@ with tf.Session() as sess:
     init_op = tf.global_variables_initializer()
     sess.run(init_op)
 
-
     if load:
         F = np.load(load_pre+'bases.npy')
         F = F.reshape([-1, sz])
     else:
         F = project_basis(np.random.randn(K, sz))
 
-
-    
     if batch_mode:
-    
+
         sequence = frames[0:batch_size].reshape([batch_size, 1, H, W, 1])
-        [ALPHA] = sess.run([alpha],feed_dict={I_trajectory: sequence, U: F})
-        
-        alpha_shape = ALPHA.shape;
+        print(F.shape)
+        [ALPHA] = sess.run([alpha], feed_dict={I_trajectory: sequence, U: F})
+
+        alpha_shape = ALPHA.shape
         batch_alpha = np.zeros((N_batches*batch_size,)+alpha_shape[1:])
-    
-        
-        
+
         for index in range(N_batches):
             print(index * batch_size)
             sequence = frames[index*batch_size:(index+1)*batch_size].reshape([batch_size, 1, H, W, 1])
 
-            print('Example '+str(index)+'/'+str(N_batches));
-            
-            [ALPHA] = sess.run([alpha],feed_dict={I_trajectory: sequence, U: F})
-            
-            batch_alpha[index*batch_size:(index+1)*batch_size] = ALPHA;
-            
-        np.save('batch_alpha.npy',batch_alpha);
-        
-                
+            print('Example '+str(index)+'/'+str(N_batches))
+
+            [ALPHA] = sess.run([alpha], feed_dict={I_trajectory: sequence, U: F})
+
+            batch_alpha[index*batch_size:(index+1)*batch_size] = ALPHA
+
+        np.save('batch_alpha.npy', batch_alpha)
+
     else:
         for epoch in range(100):
             for index in range(N):
@@ -248,7 +240,7 @@ with tf.Session() as sess:
                 for tidx in range(T-1):
                     sequence[:,[tidx+1],:,:,:] = frames[fidx+tidx+1].reshape([batch_size, 1, H, W, 1])
                 
-                #print("yeet")
+
                 summary_str, run_loss, F_prime, HIST = sess.run([summary_op, mse, U_prime, hist],\
                 feed_dict={I_trajectory: sequence, U: F})
 
@@ -279,12 +271,3 @@ with tf.Session() as sess:
                 # Save dictionary every 100 batches
                 if global_step % 100 == 0:
                     np.save('bases.npy', F)
-                
-                
-                
-                
-                
-                
-                
-                
-                

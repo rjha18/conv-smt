@@ -5,3 +5,4 @@ legacy
 *.npy
 .vscode
 .ipynb_checkpoints
+Results

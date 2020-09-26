@@ -253,10 +253,14 @@ def infer_clusters(I, U, gamma, eta, max_iters, batch_size, K_sqrt, T_sz,
     return z, hist, loss
 
 
-def infer_sparse_code(I, U, gamma, eta, max_iters):
-    gen_func = lambda y: tf.matmul(y, U)
+def infer_sparse_code(I, U, M, gamma, eta, max_iters):
+    dot_products = tf.matmul(I, tf.tranpose(U))
+    idx = tf.nn.top_k(dot_products)
+    M = tf.zeros((N, K))
+    M <- idx
+    gen_func = lambda y : tf.matmul(M*y, U)
     loss_func = lambda y: tf.reduce_mean(tf.reduce_sum(tf.square(I-gen_func(y)), axis=-1))
-    step_func = lambda prev, curr, y, t, hist: fista_loop(loss_func, prev, curr, y, t, hist, eta, gamma, rectify=False)
+    step_func = lambda y, hist: gd_loop(loss_func, y, hist, eta)
     crit_func = lambda prev, curr, y, t, hist: tf.greater(1.0, 0.0)
 
     # Sigma_U = tf.matmul(U,U,transpose_b=True)
@@ -285,5 +289,4 @@ def infer_sparse_code(I, U, gamma, eta, max_iters):
 
     r = tf.stop_gradient(curr)
     loss = loss_func(r)
-
     return r, hist, loss

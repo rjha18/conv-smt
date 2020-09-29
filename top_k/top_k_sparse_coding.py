@@ -1,13 +1,12 @@
 import numpy as np
 import tensorflow.compat.v1 as tf
-from utils import infer_clusters, MSE, topographic_generator
+from utils import infer_sparse_code, MSE, create_mask
 import argparse
 import os
 
 tf.disable_v2_behavior()
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--sigma', nargs='?', const=1.0, type=float, default=1.0)
 parser.add_argument('--gamma', nargs='?', const=1e-3, type=float, default=1e-3)
 parser.add_argument('--epochs', nargs='?', const=100, type=int, default=100)
 parser.add_argument('--verbosity', nargs='?', const=1, type=int, default=1)
@@ -22,9 +21,7 @@ K = K_sqrt*K_sqrt               # Number of filters
 k_sz = M = 12                   # Size of each filter in x or y direction
 sz = k_sz*k_sz                  # Number of pixels in filter
 
-T_sz = 5                        # Size of topological penalty map
-T_stride = 2                    # Stride of topological penalty
-sigma = args.sigma              # Smoothness of topological penalty
+k = 10                          # Number of top filters to retrieve
 max_iters = 100                 # Maximum number of iterations
 
 gamma = args.gamma              # Sparsity penalty
@@ -35,9 +32,8 @@ result_dir = "./"               # Directory for the results
 verbosity = args.verbosity      # Mod of iterations to print MSE
 
 if args.dir:
-    result_dir = "./Results/" + str(sigma) + "/" + str(gamma) + "/"
+    result_dir = "./Results/" + str(gamma) + "/"
     os.makedirs(result_dir, exist_ok=True)
-
 
 patches = np.load('small.npy')
 N = patches.shape[0]
@@ -46,15 +42,15 @@ patches = patches.reshape([N, 12, 12])
 patches = patches[:, :M, :M]
 patches = patches.reshape([N, sz])
 
-
 U = tf.placeholder(tf.float32, shape=(K, sz))
 
 I = tf.placeholder(tf.float32, shape=(batch_size, M*M))
 
-z, hist, loss = infer_clusters(I, U, gamma, eta, max_iters, batch_size,
-                               K_sqrt, T_sz, T_stride, sigma)
+mask = create_mask(I, U, batch_size, k, K)
 
-I_hat = topographic_generator(z, U, batch_size, K_sqrt, T_sz, T_stride, sigma)
+r, hist, loss = infer_sparse_code(I, U, mask, gamma, eta, max_iters)
+I_hat = tf.matmul(r, U)
+
 mse = MSE(I, I_hat)
 
 

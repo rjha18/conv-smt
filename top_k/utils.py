@@ -90,178 +90,39 @@ def MSE(y, y_hat):
     return tf.reduce_mean(tf.reduce_sum(tf.square(y-y_hat), axis=-1))
 
 
-def gaussian_box_3d(k_sz):
-    W = (k_sz-1)/2.0
-    seq = np.linspace(-W, W, k_sz)
+# Generate a mask for the filters
+def create_mask(I, U, batch_size, k, K):
+    # find the k closest filters to the image
+    dot_products = tf.matmul(I, tf.transpose(U))
+    vals, idx = tf.nn.top_k(dot_products, k)
 
-    xx, yy, zz = np.meshgrid(seq, seq, seq)
-    kernel = np.exp(-(xx**2 + yy**2 + zz**2))
-    kernel /= np.sum(kernel)
+    # Get the coordinates of the top_k filters for each item in batch
+    rows = tf.range(0, batch_size, 1)
+    rows = tf.tile(rows, [k])
+    rows = tf.reshape(rows, [k, -1])
+    rows = tf.transpose(rows)
+    rows = tf.stack([rows, idx], axis=2)
 
-    return tf.constant(np.float32(kernel))
+    # Reshape for scatter
+    indices = tf.reshape(rows, [-1, 2])
 
-
-def gaussian_box_2d(k_sz, sigma=1.0):
-    W = (k_sz-1)/2.0
-    seq = np.linspace(-W, W, k_sz)
-
-    xx, yy = np.meshgrid(seq, seq)
-    kernel = np.exp(-(xx**2 + yy**2)/np.square(sigma))
-    kernel /= np.sum(kernel)
-
-    return tf.constant(np.float32(kernel))
-
-
-def topographic_penalty3D(feats, k_sz, K_sqrt):
-    gaussian_box = gaussian_box_3d(k_sz)
-    gaussian_box = tf.reshape(gaussian_box, [k_sz, k_sz, k_sz, 1, 1])
-
-    feats = tf.reshape(feats, [-1, K_sqrt, K_sqrt, K_sqrt, 1])
-    penalty = tf.nn.conv3d(tf.square(feats),
-                           gaussian_box,
-                           strides=[1, 1, 1, 1, 1],
-                           padding='SAME')
-
-    penalty = tf.sqrt(penalty+1e-6)
-    penalty = tf.reduce_sum(penalty)
-
-    return penalty
-
-
-def abs_normalize(z):
-    print(z)
-    z_abs = np.abs(z)
-    print(np.max(z_abs) - z_abs)
-    return np.max(z_abs) - z_abs
-
-
-def topographic_generator(z, U, batch_size, K_sqrt, T_sz, T_stride, sigma):
-    K = K_sqrt*K_sqrt
-    # gaussian_box = gaussian_box_2d(T_sz, sigma)
-    # gaussian_box = tf.reshape(gaussian_box, [T_sz, T_sz, 1, 1])
-    w = tf.nn.conv2d_transpose(abs_normalize(z),
-                               tf.constant(1.0, shape=[T_sz, T_sz, 1, 1]),
-                               output_shape=[batch_size, K_sqrt, K_sqrt, 1],
-                               strides=[1, T_stride, T_stride, 1],
-                               padding='VALID')
-    w = tf.reshape(w, [batch_size, K])
-
-    I_hat = tf.matmul(w, U)
-    return I_hat
-
-
-def topographic_penalty2D(feats, k_sz, K_sqrt):
-    gaussian_box = gaussian_box_2d(k_sz)
-    gaussian_box = tf.reshape(gaussian_box, [k_sz, k_sz, 1, 1])
-
-    feats = tf.reshape(feats, [-1, K_sqrt, K_sqrt, 1])
-    penalty = tf.nn.conv2d(tf.square(feats),
-                           gaussian_box,
-                           strides=[1, 1, 1, 1],
-                           padding='SAME')
-
-    penalty = tf.sqrt(penalty+1e-6)
-    penalty = tf.reduce_sum(penalty)
-
-    return penalty
-
-
-# def infer_topographic_sparse_code(I, U, gamma, eta, max_iters, k_sz, K_sqrt):
-#     gen_func = lambda y: topographic_generator(y)
-#     loss_func = lambda y: MSE(I, gen_func(y))
-#     step_func = lambda y, hist: fista_loop(loss_func, y, hist, eta)
-#     crit_func = lambda y, hist: tf.greater(1.0, 0.0)
-
-#     r_init = tf.zeros_like(tf.matmul(I, U, transpose_b=True))
-#     hist = tf.zeros((0, 1))
-
-#     y = r_init
-
-#     [y, hist] = tf.while_loop(crit_func, step_func, [y, hist],
-#                               shape_invariants=[y.get_shape(),
-#                                                 tf.TensorShape([None,  1])],
-#                               back_prop=False,
-#                               maximum_iterations=max_iters)
-
-#     r = tf.stop_gradient(y)
-#     loss = loss_func(r)
-
-#     return r, hist, loss
-
-
-def infer_topographic_sparse_code(I, U, gamma, eta, max_iters, k_sz, K_sqrt):
-    gen_func = lambda y: tf.matmul(y, U)
-    loss_func = lambda y: MSE(I, gen_func(y)) \
-        + gamma*topographic_penalty2D(y, k_sz, K_sqrt)
-    step_func = lambda y, hist: gd_loop(loss_func, y, hist, eta)
-    crit_func = lambda y, hist: tf.greater(1.0, 0.0)
-
-    r_init = tf.zeros_like(tf.matmul(I, U, transpose_b=True))
-    hist = tf.zeros((0, 1))
-
-    y = r_init
-
-    [y, hist] = tf.while_loop(crit_func, step_func, [y, hist],
-                              shape_invariants=[y.get_shape(),
-                                                tf.TensorShape([None, 1])],
-                              back_prop=False,
-                              maximum_iterations=max_iters)
-
-    r = tf.stop_gradient(y)
-    loss = loss_func(r)
-
-    return r, hist, loss
-
-
-def infer_clusters(I, U, gamma, eta, max_iters, batch_size, K_sqrt, T_sz,
-                   T_stride, sigma):
-    gen_func = lambda y: topographic_generator(y, U, batch_size, K_sqrt, T_sz,
-                                               T_stride, sigma)
-    loss_func = lambda y: tf.reduce_mean(tf.reduce_sum(tf.square(I-gen_func(y)), axis=-1))
-    step_func = lambda prev, curr, y, t, hist: fista_loop(loss_func, prev, curr, y, t, hist, eta, gamma, rectify=False)
-    crit_func = lambda prev, curr, y, t, hist: tf.greater(1.0, 0.0)
-
-    # Sigma_U = tf.matmul(U,U,transpose_b=True)
-
-    h1 = np.int32((K_sqrt-T_sz)/T_stride + 1)
-    w1 = np.int32((K_sqrt-T_sz)/T_stride + 1)
-    z_init = tf.zeros((batch_size, h1, w1, 1))
-
-    hist = tf.zeros((0, 1))
-
-    prev = z_init
-    curr = z_init
-    y = z_init
-
-    t = tf.constant(1.0)
-
-    [prev, curr, y, t, hist] = tf.while_loop(crit_func,
-                                             step_func,
-                                             [prev, curr, y, t, hist],
-                                             shape_invariants=[
-                                                prev.get_shape(),
-                                                curr.get_shape(),
-                                                y.get_shape(),
-                                                t.get_shape(),
-                                                tf.TensorShape([None, 1])],
-                                             back_prop=False,
-                                             maximum_iterations=max_iters)
-
-    z = tf.stop_gradient(curr)
-    loss = loss_func(z)
-
-    return z, hist, loss
+    # Generate mask of 0s and 1s where 1s denote a top_k filter
+    mask = tf.scatter_nd(indices,
+                         tf.ones([indices.shape[0]]),
+                         tf.constant([batch_size, K]))
+    return mask
 
 
 def infer_sparse_code(I, U, M, gamma, eta, max_iters):
-    dot_products = tf.matmul(I, tf.tranpose(U))
-    idx = tf.nn.top_k(dot_products)
-    M = tf.zeros((N, K))
-    M <- idx
-    gen_func = lambda y : tf.matmul(M*y, U)
+    r_init = tf.zeros_like(tf.matmul(I, U, transpose_b=True))
+
+    print(r_init.shape)
+    print(U.shape)
+
+    gen_func = lambda y: tf.matmul(M*y, U)
     loss_func = lambda y: tf.reduce_mean(tf.reduce_sum(tf.square(I-gen_func(y)), axis=-1))
     step_func = lambda y, hist: gd_loop(loss_func, y, hist, eta)
-    crit_func = lambda prev, curr, y, t, hist: tf.greater(1.0, 0.0)
+    crit_func = lambda y, hist: tf.greater(1.0, 0.0)
 
     # Sigma_U = tf.matmul(U,U,transpose_b=True)
 
@@ -269,24 +130,17 @@ def infer_sparse_code(I, U, M, gamma, eta, max_iters):
     # r_init = tf.matmul(r_init,tf.linalg.inv(Sigma_U),transpose_b=True);
     hist = tf.zeros((0, 1))
 
-    prev = r_init
-    curr = r_init
     y = r_init
 
-    t = tf.constant(1.0)
+    [y, hist] = tf.while_loop(crit_func,
+                              step_func,
+                              [y, hist],
+                              shape_invariants=[
+                                  y.get_shape(),
+                                  tf.TensorShape([None, 1])],
+                              back_prop=False,
+                              maximum_iterations=max_iters)
 
-    [prev, curr, y, t, hist] = tf.while_loop(crit_func,
-                                             step_func,
-                                             [prev, curr, y, t, hist],
-                                             shape_invariants=[
-                                                prev.get_shape(),
-                                                curr.get_shape(),
-                                                y.get_shape(),
-                                                t.get_shape(),
-                                                tf.TensorShape([None, 1])],
-                                             back_prop=False,
-                                             maximum_iterations=max_iters)
-
-    r = tf.stop_gradient(curr)
+    r = tf.stop_gradient(y)
     loss = loss_func(r)
     return r, hist, loss

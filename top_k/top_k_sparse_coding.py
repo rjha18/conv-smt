@@ -44,6 +44,9 @@ patches = patches.reshape([N, sz])
 
 U = tf.placeholder(tf.float32, shape=(K, sz))
 
+# TODO: Define T(x)
+# TODO: Define U_tilde
+
 I = tf.placeholder(tf.float32, shape=(batch_size, M*M))
 
 mask = create_mask(I, U, batch_size, k, K)

@@ -114,11 +114,6 @@ def create_mask(I, U, batch_size, k, K):
 
 
 def infer_sparse_code(I, U, M, gamma, eta, max_iters):
-    r_init = tf.zeros_like(tf.matmul(I, U, transpose_b=True))
-
-    print(r_init.shape)
-    print(U.shape)
-
     gen_func = lambda y: tf.matmul(M*y, U)
     loss_func = lambda y: tf.reduce_mean(tf.reduce_sum(tf.square(I-gen_func(y)), axis=-1))
     step_func = lambda y, hist: gd_loop(loss_func, y, hist, eta)
@@ -138,7 +133,7 @@ def infer_sparse_code(I, U, M, gamma, eta, max_iters):
                               shape_invariants=[
                                   y.get_shape(),
                                   tf.TensorShape([None, 1])],
-                              back_prop=False,
+                              back_prop=True,
                               maximum_iterations=max_iters)
 
     r = tf.stop_gradient(y)

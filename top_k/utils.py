@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+from transformer import SPN
 
 
 def generate_grid(scale, resolution, dims):
@@ -71,15 +72,20 @@ def fista_loop(loss_func, prev, curr, y, t, hist, eta, gamma, rectify=False):
     return [prev, curr, y, t, hist]
 
 
-def gd_loop(loss_func, y, hist, eta):
-    loss = loss_func(y)
+def gd_loop(loss_func, y, theta, hist, eta):
+    loss = loss_func(y, theta)
     hist = tf.concat((hist, tf.reshape(loss, [1, 1])), axis=0)
 
     grad_y = tf.gradients(xs=y, ys=loss)[0]
-
     y = tf.nn.relu(y-eta*grad_y)
 
-    return [y, hist]
+    grad_theta = tf.gradients(xs=theta, ys=loss)[0]
+    print(theta)
+    print(eta)
+    print(grad_theta)
+    theta = tf.nn.relu(theta-eta*grad_theta)
+
+    return [y, theta, hist]
 
 
 # MSE loss function
@@ -114,10 +120,11 @@ def create_mask(I, U, batch_size, k, K):
 
 
 def infer_sparse_code(I, U, M, gamma, eta, max_iters):
-    gen_func = lambda y: tf.matmul(M*y, U)
-    loss_func = lambda y: tf.reduce_mean(tf.reduce_sum(tf.square(I-gen_func(y)), axis=-1))
-    step_func = lambda y, hist: gd_loop(loss_func, y, hist, eta)
-    crit_func = lambda y, hist: tf.greater(1.0, 0.0)
+    print(U.shape)
+    gen_func = lambda y, theta: tf.matmul(M*y, tf.reshape(SPN(tf.reshape(U, [-1, 12, 12, 1]), theta, 12, 12), [-1, 144]))
+    loss_func = lambda y, theta: tf.reduce_mean(tf.reduce_sum(tf.square(I-gen_func(y, theta)), axis=-1))
+    step_func = lambda y, theta, hist: gd_loop(loss_func, y, theta, hist, eta)
+    crit_func = lambda y, theta, hist: tf.greater(1.0, 0.0)
 
     # Sigma_U = tf.matmul(U,U,transpose_b=True)
 
@@ -127,15 +134,18 @@ def infer_sparse_code(I, U, M, gamma, eta, max_iters):
 
     y = r_init
 
-    [y, hist] = tf.while_loop(crit_func,
+    theta = tf.zeros((256, 6))
+
+    [y, theta, hist] = tf.while_loop(crit_func,
                               step_func,
-                              [y, hist],
+                              [y, theta, hist],
                               shape_invariants=[
                                   y.get_shape(),
+                                  theta.get_shape(),
                                   tf.TensorShape([None, 1])],
                               back_prop=True,
                               maximum_iterations=max_iters)
 
     r = tf.stop_gradient(y)
-    loss = loss_func(r)
+    loss = loss_func(r, theta)
     return r, hist, loss

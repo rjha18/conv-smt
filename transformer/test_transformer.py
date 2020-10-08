@@ -63,6 +63,7 @@ U = tf.tile(tf.reshape(U, [2, 7, 7, 1]), [2, 1, 1, 1])
 
 # TU = transformer(U, theta)
 
+print(theta.shape)
 TU, tgrids, grids, mats = SPN(U, theta, 7, 7)
 
 

@@ -80,10 +80,7 @@ def gd_loop(loss_func, y, theta, hist, eta):
     y = tf.nn.relu(y-eta*grad_y)
 
     grad_theta = tf.gradients(xs=theta, ys=loss)[0]
-    print(theta)
-    print(eta)
-    print(grad_theta)
-    theta = tf.nn.relu(theta-eta*grad_theta)
+    theta = theta-eta*grad_theta
 
     return [y, theta, hist]
 
@@ -120,8 +117,12 @@ def create_mask(I, U, batch_size, k, K):
 
 
 def infer_sparse_code(I, U, M, gamma, eta, max_iters):
-    print(U.shape)
-    gen_func = lambda y, theta: tf.matmul(M*y, tf.reshape(SPN(tf.reshape(U, [-1, 12, 12, 1]), theta, 12, 12), [-1, 144]))
+    theta = tf.zeros((I.shape[0] * U.shape[0], 6))
+    print(theta.shape)
+    U_ext = tf.reshape(U, [1, U.shape[0], 144])
+    U_ext = tf.tile(U_ext, [I.shape[0], 1, 1])
+    U_ext = tf.reshape(U_ext, [-1, 12, 12, 1])
+    gen_func = lambda y, theta: tf.matmul(M*y, tf.reshape(SPN(U_ext, theta, 12, 12), [I.shape[0], -1, 144]))
     loss_func = lambda y, theta: tf.reduce_mean(tf.reduce_sum(tf.square(I-gen_func(y, theta)), axis=-1))
     step_func = lambda y, theta, hist: gd_loop(loss_func, y, theta, hist, eta)
     crit_func = lambda y, theta, hist: tf.greater(1.0, 0.0)
@@ -134,7 +135,7 @@ def infer_sparse_code(I, U, M, gamma, eta, max_iters):
 
     y = r_init
 
-    theta = tf.zeros((256, 6))
+    theta = tf.zeros((I.shape[0] * U.shape[0], 6))
 
     [y, theta, hist] = tf.while_loop(crit_func,
                               step_func,
@@ -143,7 +144,7 @@ def infer_sparse_code(I, U, M, gamma, eta, max_iters):
                                   y.get_shape(),
                                   theta.get_shape(),
                                   tf.TensorShape([None, 1])],
-                              back_prop=True,
+                              back_prop=False,
                               maximum_iterations=max_iters)
 
     r = tf.stop_gradient(y)

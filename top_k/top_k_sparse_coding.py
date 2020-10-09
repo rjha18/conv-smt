@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow.compat.v1 as tf
 from utils import infer_sparse_code, MSE, create_mask
 import argparse
+import matplotlib.pyplot as plt
 import os
 
 tf.disable_v2_behavior()
@@ -16,18 +17,18 @@ print(args)
 
 
 # Hyperparameters
-K_sqrt = 16                     # Number of filters in x or y direction
+K_sqrt = 6                      # Number of filters in x or y direction
 K = K_sqrt*K_sqrt               # Number of filters
 k_sz = M = 12                   # Size of each filter in x or y direction
 sz = k_sz*k_sz                  # Number of pixels in filter
 
-k = 10                          # Number of top filters to retrieve
-max_iters = 100                 # Maximum number of iterations
+k = 6                           # Number of top filters to retrieve
+max_iters = 50                  # Maximum number of iterations
 
 gamma = args.gamma              # Sparsity penalty
 epochs = args.epochs            # number of epochs to train
-batch_size = 512                # Number of batches
-eta = 10e-0                     # Gradient Descent step size
+batch_size = 32                 # Number of batches
+eta = 3e-0                      # Gradient Descent step size
 result_dir = "./"               # Directory for the results
 verbosity = args.verbosity      # Mod of iterations to print MSE
 
@@ -35,7 +36,7 @@ if args.dir:
     result_dir = "./Results/" + str(gamma) + "/"
     os.makedirs(result_dir, exist_ok=True)
 
-patches = np.load('small.npy')
+patches = np.load('images.npy')
 N = patches.shape[0]
 
 patches = patches.reshape([N, 12, 12])
@@ -132,9 +133,14 @@ with tf.Session() as sess:
 
             F = project_basis(F_prime)
 
+
             if global_step % verbosity == 0:
                 print("Loss ("+str(index)+"):", MSE)
 
+            # plt.plot(HIST)
+            # plt.savefig("a.png")
+            # input()
+            
             summary_writer.add_summary(summary_str, global_step)
 
             # Save dictionary every 100 batches

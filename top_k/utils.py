@@ -76,8 +76,10 @@ def gd_loop(loss_func, y, theta, hist, eta):
     loss = loss_func(y, theta)
     hist = tf.concat((hist, tf.reshape(loss, [1, 1])), axis=0)
 
-    grad_y = tf.gradients(xs=y, ys=loss)[0]
-    y = tf.nn.relu(y-eta*grad_y)
+    print(np.random.randint(0, 4) == 0)
+    if (np.random.randint(0, 4) == 0):
+        grad_y = tf.gradients(xs=y, ys=loss)[0]
+        y = tf.nn.relu(y-eta*grad_y)
 
     grad_theta = tf.gradients(xs=theta, ys=loss)[0]
     theta = theta-eta*grad_theta
@@ -123,8 +125,8 @@ def infer_sparse_code(I, U, M, gamma, eta, max_iters):
     U_ext = tf.tile(U_ext, [I.shape[0], 1, 1])
     U_ext = tf.reshape(U_ext, [-1, 12, 12, 1])
     gen_func = lambda y, theta: tf.matmul(M*y, tf.reshape(SPN(U_ext, theta, 12, 12), [I.shape[0], -1, 144]))
-    loss_func = lambda y, theta: tf.reduce_mean(tf.reduce_sum(tf.square(I-gen_func(y, theta)), axis=-1))
-    step_func = lambda y, theta, hist: gd_loop(loss_func, y, theta, hist, eta)
+    loss_func = lambda y, theta: tf.reduce_mean(tf.reduce_sum(tf.square(I-gen_func(M*y, theta)), axis=-1))
+    step_func = lambda y, theta, hist: gd_loop(loss_func, M*y, theta, hist, eta)
     crit_func = lambda y, theta, hist: tf.greater(1.0, 0.0)
 
     # Sigma_U = tf.matmul(U,U,transpose_b=True)
@@ -135,7 +137,7 @@ def infer_sparse_code(I, U, M, gamma, eta, max_iters):
 
     y = r_init
 
-    theta = tf.zeros((I.shape[0] * U.shape[0], 6))
+    theta = tf.random.normal((tf.shape(I)[0] * tf.shape(U)[0], 6))
 
     [y, theta, hist] = tf.while_loop(crit_func,
                               step_func,
@@ -149,4 +151,4 @@ def infer_sparse_code(I, U, M, gamma, eta, max_iters):
 
     r = tf.stop_gradient(y)
     loss = loss_func(r, theta)
-    return r, hist, loss
+    return r, hist, loss, theta

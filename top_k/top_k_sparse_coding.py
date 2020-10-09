@@ -52,7 +52,7 @@ I = tf.placeholder(tf.float32, shape=(batch_size, M*M))
 
 mask = create_mask(I, U, batch_size, k, K)
 
-r, hist, loss = infer_sparse_code(I, U, mask, gamma, eta, max_iters)
+r, hist, loss, theta = infer_sparse_code(I, U, mask, gamma, eta, max_iters)
 I_hat = tf.matmul(r, U)
 
 mse = MSE(I, I_hat)
@@ -124,10 +124,11 @@ with tf.Session() as sess:
             fidx = np.random.randint(0, N, batch_size)
             batch_I = patches[fidx].reshape([-1, M*M])
 
-            summary_str, MSE, F_prime, HIST = sess.run([summary_op,
+            summary_str, MSE, F_prime, HIST, THETA = sess.run([summary_op,
                                                         mse,
                                                         U_prime,
-                                                        hist],
+                                                        hist,
+                                                        theta],
                                                        feed_dict={I: batch_I,
                                                                   U: F})
 
@@ -136,9 +137,10 @@ with tf.Session() as sess:
 
             if global_step % verbosity == 0:
                 print("Loss ("+str(index)+"):", MSE)
+                print("Theta ", THETA[0])
 
             # plt.plot(HIST)
-            # plt.savefig("a.png")
+            # plt.savefig("a.png"),
             # input()
             
             summary_writer.add_summary(summary_str, global_step)

@@ -19,14 +19,14 @@ U = tf.concat([h_line, v_line], axis=0)
 THETA = np.zeros((2, 2, 6))
 
 
-TX = 0.25
-TY = 0.25
+TX = 1.0
+TY = 1.0
 R = -1.0
-SX = 1
-SY = 1
+SX = 0.0
+SY = 0.0
 Z = 0.0
 
-THETA[0, 0, 0] = 2*TX
+THETA[0, 0, 0] = TX
 THETA[0, 0, 1] = TY
 THETA[0, 0, 2] = R
 THETA[0, 0, 3] = SX

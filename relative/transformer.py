@@ -4,7 +4,6 @@ tf.disable_v2_behavior()
 
 
 def SPN(input_fmap, theta, H, W):
-    print("T", theta.shape)
     """
     Spatial Transformer Network layer implementation as described in [1].
     The layer is composed of 3 elements:
@@ -243,5 +242,4 @@ def bilinear_sampler(img, x, y):
 
     # compute output
     out = tf.add_n([wa*Ia, wb*Ib, wc*Ic, wd*Id])
-    print("OUT", out.shape)
     return out

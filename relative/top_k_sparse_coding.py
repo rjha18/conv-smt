@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow.compat.v1 as tf
-from utils import infer_sparse_code, create_mask
+from utils import infer_sparse_code
 import argparse
 import matplotlib.pyplot as plt
 import os
@@ -42,8 +42,8 @@ patches = np.load('images.npy')
 N = patches.shape[0]
 
 patches = patches.reshape([N, 12, 12])
-patches = patches[:, :k_sz, :k_sz]
-patches = patches.reshape([N, sz])
+patches = patches[:, :(k_sz-2), :(k_sz-2)]
+patches = patches.reshape([N, (k_sz-2)*(k_sz-2)])
 
 U = tf.placeholder(tf.float32, shape=(K, sz))
 
@@ -51,14 +51,14 @@ I_center = tf.placeholder(tf.float32, shape=(batch_size, (k_sz-2)*(k_sz-2)))
 I = tf.reshape(I_center,[-1,10,10,1]);
 I = tf.pad(I,[[0,0],[1,1],[1,1],[0,0]])
 I = tf.reshape(I,[-1,k_sz*k_sz])
-print(I)
-input()
 
 # theta = tf.random.normal(np.array([I.get_shape().as_list()[0], 2]), mean=0, stddev=0.5)
 theta = tf.random.uniform(np.array([I.get_shape().as_list()[0], 2]), minval=-0.5, maxval=0.5)
 theta = tf.concat([theta, tf.zeros(np.array([I.get_shape().as_list()[0], 4]))], axis=1)
 
 r, hist, loss, theta = infer_sparse_code(I, U, gamma, eta, max_iters, theta, K_sqrt, planes, k_sz)
+
+
 I_hat = tf.matmul(r, U)
 
 # gradient descent step on features
@@ -125,14 +125,14 @@ with tf.Session() as sess:
             global_step = epoch*N+index
 
             fidx = np.random.randint(0, N, batch_size)
-            batch_I = patches[fidx].reshape([-1, k_sz*k_sz])
+            batch_I = patches[fidx].reshape([-1, (k_sz-2)*(k_sz-2)])
 
             summary_str, LOSS, F_prime, HIST, THETA = sess.run([summary_op,
                                                         loss,
                                                         U_prime,
                                                         hist,
                                                         theta],
-                                                       feed_dict={I: batch_I,
+                                                       feed_dict={I_center: batch_I,
                                                                   U: F})
 
             F = project_basis(F_prime)

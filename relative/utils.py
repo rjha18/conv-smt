@@ -156,7 +156,7 @@ def infer_sparse_code(I1, U, gamma, eta, max_iters, theta, K_sqrt, planes, M):
 def calculate_loss(gen_func, r, theta, I1, K_sqrt, planes, M):
     I2 = SPN(tf.reshape(I1, [-1, K_sqrt, K_sqrt, 1]), theta, M, M)
     
-    I2 = tf.stop_gradient(I2);
+    #I2 = tf.stop_gradient(I2);
     
     r2 = generate_r2(r, theta, K_sqrt, planes)
     r2 = tf.stop_gradient(r2);

@@ -123,9 +123,9 @@ def create_mask(I, U, batch_size, k, K):
 # Take the transformed code as r2 and reconstruct the image.
 # Use the two reconstructions to learn the filters.
 
-def infer_sparse_code(I1, U, M, gamma, eta, max_iters, theta, K_sqrt):
+def infer_sparse_code(I1, U, gamma, eta, max_iters, theta, K_sqrt, planes, M):
     gen_func = lambda y: tf.matmul(y, U)
-    loss_func = lambda y: calculate_loss(gen_func, y, theta, I1, K_sqrt)
+    loss_func = lambda y: calculate_loss(gen_func, y, theta, I1, K_sqrt, planes, M)
     step_func = lambda y, hist: gd_loop(loss_func, y, hist, eta)
     crit_func = lambda y, hist: tf.greater(1.0, 0.0)
 
@@ -153,18 +153,24 @@ def infer_sparse_code(I1, U, M, gamma, eta, max_iters, theta, K_sqrt):
     return r1, hist, loss, theta
 
 
-def calculate_loss(gen_func, r, theta, I1, K_sqrt):
-    I2 = SPN(tf.reshape(I1, [-1, K_sqrt, K_sqrt, 1]), theta, K_sqrt, K_sqrt)
-    r2 = generate_r2(r, theta, K_sqrt)
+def calculate_loss(gen_func, r, theta, I1, K_sqrt, planes, M):
+    I2 = SPN(tf.reshape(I1, [-1, K_sqrt, K_sqrt, 1]), theta, M, M)
+    
+    I2 = tf.stop_gradient(I2);
+    
+    r2 = generate_r2(r, theta, K_sqrt, planes)
+    r2 = tf.stop_gradient(r2);
+    
     loss1 = tf.square(I1-gen_func(r))
-    I2 = tf.reshape(I2, [-1, K_sqrt * K_sqrt])
+    I2 = tf.reshape(I2, [-1, M * M])
     loss2 = tf.square(I2-gen_func(r2))
     return tf.reduce_mean(tf.reduce_sum(loss1 + loss2, axis=-1))
 
 
 # Shift the top K filters of each image in r1
-def generate_r2(r1, theta, K_sqrt):
+def generate_r2(r1, theta, K_sqrt, planes):
     r1_flat = tf.reshape(r1, [-1, K_sqrt, K_sqrt, 1])
+    theta = tf.tile(theta,[planes,1]);
     r2 = SPN(r1_flat, theta, K_sqrt, K_sqrt)
-    r2 = tf.reshape(r2, [-1, K_sqrt * K_sqrt])
+    r2 = tf.reshape(r2, [-1, K_sqrt * K_sqrt * planes])
     return r2

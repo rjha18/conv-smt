@@ -16,19 +16,21 @@ args = parser.parse_args()
 print(args)
 
 
+
 # Hyperparameters
-K_sqrt = 8                      # Number of filters in x or y direction
-K = K_sqrt*K_sqrt               # Number of filters
-k_sz = M = K_sqrt               # Size of each filter in x or y direction
+planes = 8;
+K_sqrt = 6                      # Number of filters in x or y direction
+K = planes*K_sqrt*K_sqrt               # Number of filters
+k_sz = 12		        # Size of each filter in x or y direction
 sz = k_sz*k_sz                  # Number of pixels in filter
 
 k = 6                           # Number of top filters to retrieve
-max_iters = 50                  # Maximum number of iterations
+max_iters = 80                  # Maximum number of iterations
 
 gamma = args.gamma              # Sparsity penalty
 epochs = args.epochs            # number of epochs to train
 batch_size = 32                 # Number of batches
-eta = 3e-0                      # Gradient Descent step size
+eta = 1e-0                      # Gradient Descent step size
 result_dir = "./"               # Directory for the results
 verbosity = args.verbosity      # Mod of iterations to print loss
 
@@ -40,41 +42,39 @@ patches = np.load('images.npy')
 N = patches.shape[0]
 
 patches = patches.reshape([N, 12, 12])
-patches = patches[:, :M, :M]
+patches = patches[:, :k_sz, :k_sz]
 patches = patches.reshape([N, sz])
 
 U = tf.placeholder(tf.float32, shape=(K, sz))
 
-I = tf.placeholder(tf.float32, shape=(batch_size, M*M))
+I = tf.placeholder(tf.float32, shape=(batch_size, k_sz*k_sz))
 
-mask = tf.ones_like(tf.matmul(I, tf.transpose(U)))
 
-mask = create_mask(I, U, batch_size, k, K)
 
 # theta = tf.random.normal(np.array([I.get_shape().as_list()[0], 2]), mean=0, stddev=0.5)
-theta = tf.random.uniform(np.array([I.get_shape().as_list()[0], 2]), minval=-1.0, maxval=1.0)
+theta = tf.random.uniform(np.array([I.get_shape().as_list()[0], 2]), minval=-0.5, maxval=0.5)
 theta = tf.concat([theta, tf.zeros(np.array([I.get_shape().as_list()[0], 4]))], axis=1)
 
-r, hist, loss, theta = infer_sparse_code(I, U, mask, gamma, eta, max_iters, theta, K_sqrt)
+r, hist, loss, theta = infer_sparse_code(I, U, gamma, eta, max_iters, theta, K_sqrt, planes, k_sz)
 I_hat = tf.matmul(r, U)
 
 # gradient descent step on features
 grad_U = tf.gradients(xs=U, ys=loss)[0]
-U_prime = U - 1e-0*grad_U
+U_prime = U - 1e-1*grad_U
 
 # keep track of everything on tensorboard
 tf.summary.scalar('loss', loss)
 
 tf.summary.image('I0', tf.reshape(
-    tf.slice(I, [0, 0], [1, -1]), [-1, M, M, 1]))
+    tf.slice(I, [0, 0], [1, -1]), [-1, k_sz, k_sz, 1]))
 tf.summary.image('I0_hat', tf.reshape(
-    tf.slice(I_hat, [0, 0], [1, -1]), [-1, M, M, 1]))
+    tf.slice(I_hat, [0, 0], [1, -1]), [-1, k_sz, k_sz, 1]))
 
 
 # This parts displays the features nicely
-leaves = tf.reshape(U, [K_sqrt, K_sqrt, 1, sz])
+leaves = tf.reshape(U, [K_sqrt, K_sqrt, planes, sz])
 
-for plane in range(1):
+for plane in range(planes):
     plane_leaves = tf.slice(leaves, [0, 0, plane, 0], [-1, -1, 1, -1])
     plane_leaves = tf.squeeze(plane_leaves, axis=2)
     tiled_leaves = tf.zeros((0, K_sqrt*k_sz))
@@ -122,7 +122,7 @@ with tf.Session() as sess:
             global_step = epoch*N+index
 
             fidx = np.random.randint(0, N, batch_size)
-            batch_I = patches[fidx].reshape([-1, M*M])
+            batch_I = patches[fidx].reshape([-1, k_sz*k_sz])
 
             summary_str, LOSS, F_prime, HIST, THETA = sess.run([summary_op,
                                                         loss,
@@ -138,7 +138,8 @@ with tf.Session() as sess:
             if global_step % verbosity == 0:
                 print("Loss ("+str(index)+"):", LOSS)
 
-            # plt.plot(HIST)
+            #plt.plot(HIST)
+            #plt.show()
             # plt.savefig("a.png"),
             # input()
             

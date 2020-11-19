@@ -18,8 +18,8 @@ print(args)
 
 
 # Hyperparameters
-planes = 1;
-K_sqrt = 8                     # Number of filters in x or y direction
+planes = 8;
+K_sqrt = 6                     # Number of filters in x or y direction
 K = planes*K_sqrt*K_sqrt               # Number of filters
 k_sz = 12		        # Size of each filter in x or y direction
 sz = k_sz*k_sz                  # Number of pixels in filter
@@ -30,7 +30,7 @@ max_iters = 100                  # Maximum number of iterations
 gamma = args.gamma              # Sparsity penalty
 epochs = args.epochs            # number of epochs to train
 batch_size = 32                 # Number of batches
-eta = 5e-1                      # Gradient Descent step size
+eta = 3e-0                      # Gradient Descent step size
 result_dir = "./"               # Directory for the results
 verbosity = args.verbosity      # Mod of iterations to print loss
 

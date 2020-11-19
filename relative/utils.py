@@ -81,6 +81,16 @@ def gd_loop(loss_func, y, hist, eta):
     y = tf.nn.relu(y-eta*grad_y)
 
     return [y, hist]
+    
+    
+def ista_loop(loss_func, y, hist, eta, gamma):
+    loss = loss_func(y)
+    hist = tf.concat((hist, tf.reshape(loss, [1, 1])), axis=0)
+
+    grad_y = tf.gradients(xs=y, ys=loss)[0]
+    y = tf.nn.relu(_soft_th(y-eta*grad_y,eta*gamma))
+
+    return [y, hist]
 
 
 # MSE loss function
@@ -126,7 +136,7 @@ def create_mask(I, U, batch_size, k, K):
 def infer_sparse_code(I1, U, gamma, eta, max_iters, theta, K_sqrt, planes, M):
     gen_func = lambda y: tf.matmul(y, U)
     loss_func = lambda y: calculate_loss(gen_func, y, theta, I1, K_sqrt, planes, M)
-    step_func = lambda y, hist: gd_loop(loss_func, y, hist, eta)
+    step_func = lambda y, hist: ista_loop(loss_func, y, hist, eta, gamma)
     crit_func = lambda y, hist: tf.greater(1.0, 0.0)
 
     # Sigma_U = tf.matmul(U,U,transpose_b=True)

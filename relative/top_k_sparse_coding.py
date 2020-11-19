@@ -18,19 +18,19 @@ print(args)
 
 
 # Hyperparameters
-planes = 8;
-K_sqrt = 6                      # Number of filters in x or y direction
+planes = 1;
+K_sqrt = 8                     # Number of filters in x or y direction
 K = planes*K_sqrt*K_sqrt               # Number of filters
 k_sz = 12		        # Size of each filter in x or y direction
 sz = k_sz*k_sz                  # Number of pixels in filter
 
 k = 6                           # Number of top filters to retrieve
-max_iters = 80                  # Maximum number of iterations
+max_iters = 100                  # Maximum number of iterations
 
 gamma = args.gamma              # Sparsity penalty
 epochs = args.epochs            # number of epochs to train
 batch_size = 32                 # Number of batches
-eta = 1e-0                      # Gradient Descent step size
+eta = 5e-1                      # Gradient Descent step size
 result_dir = "./"               # Directory for the results
 verbosity = args.verbosity      # Mod of iterations to print loss
 
@@ -47,9 +47,12 @@ patches = patches.reshape([N, sz])
 
 U = tf.placeholder(tf.float32, shape=(K, sz))
 
-I = tf.placeholder(tf.float32, shape=(batch_size, k_sz*k_sz))
-
-
+I_center = tf.placeholder(tf.float32, shape=(batch_size, (k_sz-2)*(k_sz-2)))
+I = tf.reshape(I_center,[-1,10,10,1]);
+I = tf.pad(I,[[0,0],[1,1],[1,1],[0,0]])
+I = tf.reshape(I,[-1,k_sz*k_sz])
+print(I)
+input()
 
 # theta = tf.random.normal(np.array([I.get_shape().as_list()[0], 2]), mean=0, stddev=0.5)
 theta = tf.random.uniform(np.array([I.get_shape().as_list()[0], 2]), minval=-0.5, maxval=0.5)

@@ -169,7 +169,7 @@ def calculate_loss(gen_func, r, theta, I1, K_sqrt, planes, M):
     #I2 = tf.stop_gradient(I2);
     
     r2 = generate_r2(r, theta, K_sqrt, planes)
-    r2 = tf.stop_gradient(r2);
+    #r2 = tf.stop_gradient(r2);
     
     loss1 = tf.square(I1-gen_func(r))
     I2 = tf.reshape(I2, [-1, M * M])

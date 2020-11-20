@@ -18,19 +18,19 @@ print(args)
 
 
 # Hyperparameters
-planes = 8;
+planes = 4;
 K_sqrt = 6                     # Number of filters in x or y direction
 K = planes*K_sqrt*K_sqrt               # Number of filters
 k_sz = 12		        # Size of each filter in x or y direction
 sz = k_sz*k_sz                  # Number of pixels in filter
 
 k = 6                           # Number of top filters to retrieve
-max_iters = 100                  # Maximum number of iterations
+max_iters = 150                  # Maximum number of iterations
 
 gamma = args.gamma              # Sparsity penalty
 epochs = args.epochs            # number of epochs to train
 batch_size = 32                 # Number of batches
-eta = 3e-0                      # Gradient Descent step size
+eta = 5e-2                      # Gradient Descent step size
 result_dir = "./"               # Directory for the results
 verbosity = args.verbosity      # Mod of iterations to print loss
 
@@ -63,7 +63,7 @@ I_hat = tf.matmul(r, U)
 
 # gradient descent step on features
 grad_U = tf.gradients(xs=U, ys=loss)[0]
-U_prime = U - 1e-1*grad_U
+U_prime = U - 1e-0*grad_U
 
 # keep track of everything on tensorboard
 tf.summary.scalar('loss', loss)
@@ -117,7 +117,11 @@ with tf.Session() as sess:
     init_op = tf.global_variables_initializer()
     sess.run(init_op)
 
-    F = project_basis(np.random.randn(K, sz))
+    F = np.random.randn(planes,1,sz)
+    F = np.tile(F,[1,K_sqrt*K_sqrt,1]);
+    F += 1e-3*np.random.randn(planes,K_sqrt*K_sqrt,sz);
+    F = F.reshape([K,sz]);
+    F = project_basis(F)
 
     for epoch in range(epochs):
         for index in range(N):
